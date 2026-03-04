@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VibeCheck
 
-## Getting Started
+Security scanner for vibe-coded projects. Paste a GitHub repo URL and get an interactive security checklist with one-click Cursor IDE fix prompts.
 
-First, run the development server:
+## What it detects
+
+- **24 security vulnerability categories**: SQL injection, XSS, SSRF, CSRF, hardcoded secrets, broken auth, command injection, and more
+- **11 scalability issue categories**: N+1 queries, missing pagination, memory leaks, race conditions, and more
+- **Dependency CVEs**: Known vulnerabilities in npm, pip, bundler, and Go packages
+
+## How it works
+
+1. **Static analysis** via Semgrep with OWASP, security-audit, and custom vibe-code rulesets
+2. **Secret detection** via Gitleaks
+3. **Dependency audit** via npm audit, pip-audit, etc.
+4. **AI-powered contextual review** via Google Gemini for logic-level issues static tools miss
+5. **Interactive checklist report** with copy-to-Cursor prompts for every finding
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 16+ and Redis 7+ (via `brew install postgresql@16 redis`)
+- [Semgrep](https://semgrep.dev/docs/getting-started/) (`brew install semgrep`)
+- [Gitleaks](https://github.com/gitleaks/gitleaks) (`brew install gitleaks`)
+- Google Gemini API key (for AI review, optional -- get one at https://aistudio.google.com/apikey)
+
+### Quick Start
 
 ```bash
+# Clone the repo
+git clone <your-repo-url>
+cd vibecheck
+
+# Install dependencies
+npm install
+
+# Start PostgreSQL and Redis
+docker compose up -d
+
+# Copy env file and fill in values
+cp .env.example .env
+
+# Run database migrations
+npx prisma migrate dev --name init
+
+# Generate Prisma client
+npx prisma generate
+
+# Start the dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# In a separate terminal, start the scan worker
+npx tsx --tsconfig tsconfig.json src/workers/scan-worker.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `GEMINI_API_KEY` | No | Google Gemini API key for AI-powered review |
+| `GITHUB_CLIENT_ID` | No | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | No | GitHub OAuth app client secret |
+| `NEXTAUTH_SECRET` | Yes | Random string for session encryption |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Framework**: Next.js 15 (App Router) + TypeScript
+- **Database**: PostgreSQL + Prisma ORM
+- **Queue**: BullMQ + Redis
+- **UI**: Tailwind CSS + shadcn/ui
+- **Analysis**: Semgrep, Gitleaks, npm audit, Google Gemini

@@ -1,0 +1,187 @@
+rules:
+  - id: vibecheck.missing-csrf-nextjs
+    patterns:
+      - pattern: |
+          export async function POST($REQ) {
+            ...
+          }
+      - pattern-not: |
+          export async function POST($REQ) {
+            ...
+            verifyCsrfToken(...)
+            ...
+          }
+      - pattern-not: |
+          export async function POST($REQ) {
+            ...
+            validateCsrf(...)
+            ...
+          }
+      - pattern-not: |
+          export async function POST($REQ) {
+            ...
+            csrf(...)
+            ...
+          }
+    paths:
+      include:
+        - "**/api/**/route.ts"
+        - "**/api/**/route.js"
+    message: >
+      This API route handler does not implement CSRF protection. 
+      Vibe-coded apps almost never implement CSRF tokens.
+      Consider adding CSRF validation or using SameSite cookies.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: csrf
+      cwe: ["CWE-352"]
+      owasp: ["A5:2017"]
+
+  - id: vibecheck.innerhtml-usage
+    pattern-either:
+      - pattern: |
+          <$TAG dangerouslySetInnerHTML={$VAL} />
+      - pattern: |
+          <$TAG dangerouslySetInnerHTML={$VAL}></$TAG>
+      - pattern: $EL.innerHTML = $VAR
+    message: >
+      Direct use of innerHTML/dangerouslySetInnerHTML can lead to XSS attacks.
+      Use textContent, React JSX expressions, or a sanitization library like DOMPurify.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: xss
+      cwe: ["CWE-79"]
+
+  - id: vibecheck.hardcoded-env-values
+    pattern-either:
+      - pattern-regex: "postgresql://[^\"'\\s]+"
+      - pattern-regex: "mongodb://[^\"'\\s]+"
+      - pattern-regex: "mongodb\\+srv://[^\"'\\s]+"
+      - pattern-regex: "mysql://[^\"'\\s]+"
+      - pattern-regex: "redis://[^\"'\\s]+"
+    message: >
+      Database or service connection string appears to be hardcoded. 
+      Use environment variables instead.
+    severity: ERROR
+    languages: [typescript, javascript, python]
+    metadata:
+      category: hardcoded_secrets
+
+  - id: vibecheck.missing-rate-limit-express
+    patterns:
+      - pattern: |
+          $APP.post($ROUTE, ...)
+      - pattern-not: |
+          $APP.use(..., rateLimit(...), ...)
+    message: >
+      POST endpoint without rate limiting. Consider adding rate limiting
+      middleware to prevent abuse and brute-force attacks.
+    severity: INFO
+    languages: [typescript, javascript]
+    metadata:
+      category: rate_limiting
+
+  - id: vibecheck.exec-with-template-literal
+    patterns:
+      - pattern-either:
+          - pattern: exec(`...${$VAR}...`)
+          - pattern: execSync(`...${$VAR}...`)
+          - pattern: |
+              spawn(`...${$VAR}...`, { shell: true })
+    message: >
+      Command execution with template literal interpolation is vulnerable to
+      command injection. Use execFileSync with array arguments instead.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: command_injection
+      cwe: ["CWE-78"]
+
+  - id: vibecheck.no-error-response-details
+    patterns:
+      - pattern-either:
+          - pattern: |
+              res.status(500).json({ error: $ERR.message })
+          - pattern: res.status(500).send($ERR.message)
+          - pattern: |
+              res.status(500).json({ stack: $ERR.stack })
+    message: >
+      Sending raw error messages or stack traces to clients leaks internal
+      information. Return a generic error message and log the details server-side.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: error_handling
+      cwe: ["CWE-209"]
+
+  - id: vibecheck.unbounded-find-all
+    patterns:
+      - pattern-either:
+          - pattern: $MODEL.findMany()
+          - pattern: |
+              $MODEL.findMany({ where: ... })
+          - pattern: $MODEL.find({})
+          - pattern: $MODEL.find()
+    message: >
+      Database query without pagination (no take/limit). This can cause
+      performance issues and memory exhaustion with large datasets. 
+      Add take/limit and skip/offset parameters.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: unbounded_fetch
+
+  - id: vibecheck.missing-await-async
+    patterns:
+      - pattern: |
+          async function $FUNC(...) {
+            ...
+            $PROMISE(...)
+            ...
+          }
+      - pattern-not: |
+          async function $FUNC(...) {
+            ...
+            await $PROMISE(...)
+            ...
+          }
+    message: >
+      Async function may have unhandled promise. Ensure all async operations
+      are properly awaited to prevent race conditions and silent failures.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: unhandled_errors
+
+  - id: vibecheck.env-file-committed
+    patterns:
+      - pattern-regex: "^(?!#)\\w+=.+"
+    paths:
+      include:
+        - ".env"
+        - ".env.local"
+        - ".env.production"
+    message: >
+      Environment file with values appears to be tracked in git. 
+      Add .env* to .gitignore and use .env.example with placeholder values.
+    severity: ERROR
+    languages: [generic]
+    metadata:
+      category: exposed_config
+
+  - id: vibecheck.missing-input-validation
+    patterns:
+      - pattern: |
+          const { $VAR } = $REQ.body;
+      - pattern-not: |
+          const { $VAR } = $VALIDATOR($REQ.body);
+    message: >
+      Request body destructured without validation. Use a validation library
+      like Zod, Yup, or Joi to validate and sanitize input data.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: input_validation
+      cwe: ["CWE-20"]

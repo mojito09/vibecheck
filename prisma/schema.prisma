@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  githubId    Int      @unique
+  name        String?
+  email       String?  @unique
+  avatarUrl   String?
+  accessToken String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  scans       Scan[]
+}
+
+model Scan {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id])
+  repoUrl       String
+  repoName      String
+  branch        String    @default("main")
+  commitSha     String?
+  status        ScanStatus @default(QUEUED)
+  progress      Int       @default(0)
+  progressMessage String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  overallScore  Int?
+  summary       String?
+  languages     String[]
+  frameworks    String[]
+  parentScanId  String?
+  parentScan    Scan?     @relation("RescanChain", fields: [parentScanId], references: [id])
+  rescans       Scan[]    @relation("RescanChain")
+  findings      Finding[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([repoUrl])
+  @@index([parentScanId])
+}
+
+model Finding {
+  id                  String        @id @default(cuid())
+  scanId              String
+  scan                Scan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  category            String
+  severity            Severity
+  title               String
+  description         String
+  plainTitle          String?
+  plainDescription    String?
+  filePath            String
+  lineStart           Int?
+  lineEnd             Int?
+  codeSnippet         String?
+  fixSuggestion       String?
+  fixCode             String?
+  cursorPromptShort   String?
+  cursorPromptDetailed String?
+  detectedBy          String
+  status              FindingStatus @default(OPEN)
+  fingerprint         String
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([scanId])
+  @@index([fingerprint])
+  @@index([severity])
+  @@index([status])
+}
+
+enum ScanStatus {
+  QUEUED
+  CLONING
+  DETECTING
+  ANALYZING
+  SCANNING_SECRETS
+  SCANNING_DEPS
+  AI_REVIEW
+  GENERATING_REPORT
+  COMPLETED
+  FAILED
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum FindingStatus {
+  OPEN
+  FIXED
+  DISMISSED
+}
