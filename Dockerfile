@@ -13,4 +13,5 @@ RUN npx prisma generate && npx next build
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["sh", "-c", "npx prisma migrate deploy; npm run worker & npm run start"]
+RUN chmod +x start.sh
+CMD ["bash", "start.sh"]
