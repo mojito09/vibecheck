@@ -463,12 +463,12 @@ async function processScan(job: Job<ScanJobData>) {
 
     let userMessage = "An unexpected error occurred during scanning.";
     if (error instanceof Error) {
-      const msg = error.message;
+      const msg = error.message.slice(0, 500);
       if (msg.includes("Remote branch") && msg.includes("not found")) {
         userMessage = `Branch not found. The repository may use a different default branch. Try specifying the branch (e.g. "master") on the scan form.`;
       } else if (msg.includes("Repository not found") || msg.includes("fatal: repository")) {
         userMessage = "Repository not found. Check the URL and ensure the repo is public (or sign in for private repos).";
-      } else if (msg.includes("timeout") || msg.includes("ETIMEDOUT")) {
+      } else if (msg.includes("ETIMEDOUT") || (msg.includes("SIGTERM") && msg.includes("timed out"))) {
         userMessage = "Clone timed out. The repository may be too large or the network connection is slow.";
       } else {
         userMessage = "Scan failed due to an internal error. Please try again.";

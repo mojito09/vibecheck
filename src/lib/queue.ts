@@ -1,8 +1,12 @@
 import { Queue, Worker, Job } from "bullmq";
 
+const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
+
 const connection = {
-  host: new URL(process.env.REDIS_URL || "redis://localhost:6379").hostname,
-  port: parseInt(new URL(process.env.REDIS_URL || "redis://localhost:6379").port || "6379"),
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port || "6379"),
+  ...(redisUrl.username && { username: redisUrl.username }),
+  ...(redisUrl.password && { password: redisUrl.password }),
 };
 
 export const scanQueue = new Queue("scan", { connection });
