@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-set -e
 
-npx prisma migrate deploy
+echo "Running migrations..."
+./node_modules/.bin/prisma migrate deploy || echo "Migration warning (non-fatal)"
 
+echo "Starting worker..."
 npm run worker &
 WORKER_PID=$!
 
@@ -14,6 +15,7 @@ cleanup() {
 
 trap cleanup SIGTERM SIGINT
 
+echo "Starting Next.js..."
 npm run start &
 NEXT_PID=$!
 
