@@ -261,7 +261,7 @@ export default function ScanResultPage({ params }: ScanPageProps) {
           </p>
         )}
 
-        <h1 className="text-5xl md:text-[7rem] font-medium leading-[0.85] tracking-[-0.04em] mb-8 md:mb-12">
+        <h1 className="text-5xl md:text-[7rem] font-medium leading-[0.85] tracking-[-0.04em] mb-8 md:mb-12 lg:pr-[380px] break-words">
           {scan?.repoName || "Scan"}
         </h1>
 
