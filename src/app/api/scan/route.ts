@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { scanQueue } from "@/lib/queue";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getDbUser } from "@/lib/auth";
 
 const GITHUB_URL_REGEX = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/;
 
@@ -56,6 +57,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const user = await getDbUser();
+
     const scan = await prisma.scan.create({
       data: {
         repoUrl: normalizedUrl,
@@ -66,6 +69,7 @@ export async function POST(request: NextRequest) {
         progress: 0,
         progressMessage: "Scan queued...",
         parentScanId: parentScanId || null,
+        userId: user?.id ?? null,
       },
     });
 

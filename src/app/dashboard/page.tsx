@@ -46,10 +46,17 @@ function getStatusLabel(status: string): string {
 export default function DashboardPage() {
   const [scans, setScans] = useState<ScanSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
     fetch("/api/scans")
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          setUnauthorized(true);
+          return { scans: [] };
+        }
+        return r.json();
+      })
       .then((data) => setScans(data.scans || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -72,6 +79,16 @@ export default function DashboardPage() {
       {loading ? (
         <div className="py-24 text-center text-muted-foreground text-sm font-mono uppercase tracking-wider">
           Loading...
+        </div>
+      ) : unauthorized ? (
+        <div className="py-24 border border-dashed border-border text-center">
+          <p className="text-muted-foreground text-sm mb-6">Sign in to view your scan history.</p>
+          <a
+            href="/api/auth/signin"
+            className="bg-foreground text-background px-6 py-2.5 font-mono text-sm uppercase tracking-[0.05em] hover:opacity-80 transition-opacity inline-block"
+          >
+            Sign In
+          </a>
         </div>
       ) : scans.length === 0 ? (
         <div className="py-24 border border-dashed border-border text-center">
