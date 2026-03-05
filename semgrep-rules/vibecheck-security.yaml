@@ -185,3 +185,106 @@ rules:
     metadata:
       category: input_validation
       cwe: ["CWE-20"]
+
+  - id: vibecheck.sql-injection-raw-query
+    pattern-either:
+      - pattern: $DB.$queryRawUnsafe(`...${$VAR}...`)
+      - pattern: $DB.$queryRawUnsafe("..." + $VAR + "...")
+      - pattern: $DB.$queryRawUnsafe(`...`)
+      - pattern: $CONN.query("..." + $VAR + "...")
+      - pattern: $CONN.query(`...${$VAR}...`)
+    message: >
+      Raw SQL query built with string interpolation or concatenation is
+      vulnerable to SQL injection. Use parameterized queries ($queryRaw
+      with Prisma, or prepared statements) instead.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: injection
+      cwe: ["CWE-89"]
+      owasp: ["A1:2017"]
+
+  - id: vibecheck.ssrf-fetch-user-input
+    patterns:
+      - pattern-either:
+          - pattern: fetch($URL, ...)
+          - pattern: fetch($URL)
+          - pattern: axios($URL, ...)
+          - pattern: axios.get($URL, ...)
+          - pattern: axios.post($URL, ...)
+      - pattern-not: fetch("...", ...)
+      - pattern-not: fetch("...")
+      - pattern-not: axios("...", ...)
+      - pattern-not: axios.get("...", ...)
+      - pattern-not: axios.post("...", ...)
+    message: >
+      HTTP request to a potentially user-controlled URL. If the URL comes
+      from user input, this is vulnerable to SSRF. Validate and allowlist
+      target URLs before making requests.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: ssrf
+      cwe: ["CWE-918"]
+
+  - id: vibecheck.open-redirect
+    pattern-either:
+      - pattern: res.redirect($URL)
+      - pattern: $RES.redirect($URL)
+    message: >
+      Redirect using a potentially user-controlled URL. Validate that the
+      redirect target is an allowed domain to prevent open redirect attacks
+      that can be used for phishing.
+    severity: WARNING
+    languages: [typescript, javascript]
+    metadata:
+      category: open_redirect
+      cwe: ["CWE-601"]
+
+  - id: vibecheck.eval-usage
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+    message: >
+      Use of eval() or new Function() with dynamic input can lead to
+      arbitrary code execution. Use safer alternatives like JSON.parse
+      or a sandboxed expression evaluator.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: insecure_deserialization
+      cwe: ["CWE-94"]
+
+  - id: vibecheck.hardcoded-credentials
+    pattern-either:
+      - pattern: const $SECRET = "...";
+      - pattern: let $SECRET = "...";
+      - pattern: var $SECRET = "...";
+    metavariable-regex:
+      metavariable: $SECRET
+      regex: (?i).*(PASSWORD|SECRET|API_KEY|TOKEN|CREDENTIAL|AUTH_KEY).*
+    message: >
+      A variable with a credential-related name is assigned a hardcoded
+      string value. Store secrets in environment variables or a secrets
+      manager, never in source code.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: hardcoded_secrets
+      cwe: ["CWE-798"]
+
+  - id: vibecheck.weak-crypto-md5-sha1
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")
+      - pattern: $CRYPTO.createHash("md5")
+      - pattern: $CRYPTO.createHash("sha1")
+    message: >
+      MD5 and SHA1 are cryptographically broken and should not be used
+      for hashing passwords or sensitive data. Use bcrypt, scrypt, or
+      argon2 for passwords, and SHA-256+ for general hashing.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: weak_auth
+      cwe: ["CWE-328"]
