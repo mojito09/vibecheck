@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { scanQueue } from "@/lib/queue";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const GITHUB_URL_REGEX = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/;
+
+const SCAN_RATE_LIMIT = 10;
+const SCAN_RATE_WINDOW_SECONDS = 3600;
 
 function extractRepoName(url: string): string {
   const parts = url.replace(/\/$/, "").split("/");
@@ -11,6 +15,27 @@ function extractRepoName(url: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const { allowed, remaining, retryAfterSeconds } = await checkRateLimit(
+      `scan:${ip}`,
+      SCAN_RATE_LIMIT,
+      SCAN_RATE_WINDOW_SECONDS
+    );
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Try again in ${retryAfterSeconds} seconds.` },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSeconds),
+            "X-RateLimit-Limit": String(SCAN_RATE_LIMIT),
+            "X-RateLimit-Remaining": "0",
+          },
+        }
+      );
+    }
+
     const body = await request.json();
     const { repoUrl, branch = "main", parentScanId } = body;
 
@@ -50,7 +75,13 @@ export async function POST(request: NextRequest) {
       branch,
     });
 
-    return NextResponse.json({ scanId: scan.id }, { status: 201 });
+    return NextResponse.json({ scanId: scan.id }, {
+      status: 201,
+      headers: {
+        "X-RateLimit-Limit": String(SCAN_RATE_LIMIT),
+        "X-RateLimit-Remaining": String(remaining),
+      },
+    });
   } catch (error) {
     console.error("Failed to create scan:", error);
     return NextResponse.json(

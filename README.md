@@ -13,7 +13,7 @@ Security scanner for vibe-coded projects. Paste a GitHub repo URL and get an int
 1. **Static analysis** via Semgrep with OWASP, security-audit, and custom vibe-code rulesets
 2. **Secret detection** via Gitleaks
 3. **Dependency audit** via npm audit, pip-audit, etc.
-4. **AI-powered contextual review** via Google Gemini for logic-level issues static tools miss
+4. **AI-powered contextual review** via Claude Sonnet 4 for logic-level issues static tools miss
 5. **Interactive checklist report** with copy-to-Cursor prompts for every finding
 
 ## Setup
@@ -24,7 +24,7 @@ Security scanner for vibe-coded projects. Paste a GitHub repo URL and get an int
 - PostgreSQL 16+ and Redis 7+ (via `brew install postgresql@16 redis`)
 - [Semgrep](https://semgrep.dev/docs/getting-started/) (`brew install semgrep`)
 - [Gitleaks](https://github.com/gitleaks/gitleaks) (`brew install gitleaks`)
-- Google Gemini API key (for AI review, optional -- get one at https://aistudio.google.com/apikey)
+- Anthropic API key (for AI review, optional — get one at https://console.anthropic.com)
 
 ### Quick Start
 
@@ -61,15 +61,15 @@ npx tsx --tsconfig tsconfig.json src/workers/scan-worker.ts
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes | Redis connection string |
-| `GEMINI_API_KEY` | No | Google Gemini API key for AI-powered review |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key for AI-powered review (Claude Sonnet 4) |
 | `GITHUB_CLIENT_ID` | No | GitHub OAuth app client ID |
 | `GITHUB_CLIENT_SECRET` | No | GitHub OAuth app client secret |
 | `NEXTAUTH_SECRET` | Yes | Random string for session encryption |
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router) + TypeScript
+- **Framework**: Next.js 16 (App Router) + TypeScript
 - **Database**: PostgreSQL + Prisma ORM
 - **Queue**: BullMQ + Redis
 - **UI**: Tailwind CSS + shadcn/ui
-- **Analysis**: Semgrep, Gitleaks, npm audit, Google Gemini
+- **Analysis**: Semgrep, Gitleaks, npm audit, Claude Sonnet 4
