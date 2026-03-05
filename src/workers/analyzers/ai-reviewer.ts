@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 import { readFile, readdir } from "fs/promises";
 import { join, extname } from "path";
 import { FindingData, Severity } from "@/types/scan";
@@ -186,8 +186,8 @@ export async function runAIReview(
   frameworks: string[],
   secretFindings: FindingData[] = []
 ): Promise<FindingData[]> {
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY not set, skipping AI review");
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn("ANTHROPIC_API_KEY not set, skipping AI review");
     return [];
   }
 
@@ -197,29 +197,28 @@ export async function runAIReview(
   const prompt = buildPrompt(files, existingFindings, languages, frameworks);
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 65536,
-        responseMimeType: "application/json",
-      },
-    });
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     let content: string | null = null;
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const result = await model.generateContent(prompt);
-        content = result.response.text();
+        const response = await client.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 16384,
+          temperature: 0.1,
+          system: SYSTEM_INSTRUCTION,
+          messages: [{ role: "user", content: prompt }],
+        });
+
+        const textBlock = response.content.find((b) => b.type === "text");
+        content = textBlock ? textBlock.text : null;
         break;
       } catch (retryError: unknown) {
         const status = (retryError as { status?: number }).status;
         if (status === 429 && attempt < maxRetries - 1) {
           const delay = Math.pow(2, attempt + 1) * 5000;
-          console.warn(`Gemini 429, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
+          console.warn(`Claude 429, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }

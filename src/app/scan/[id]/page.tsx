@@ -92,7 +92,6 @@ export default function ScanResultPage({ params }: ScanPageProps) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("Loading...");
-  const [scanMode, setScanMode] = useState("quick");
   const [logEntries, setLogEntries] = useState<{ t: number; m: string }[]>([]);
   const [error, setError] = useState("");
   const [rescanning, setRescanning] = useState(false);
@@ -131,7 +130,6 @@ export default function ScanResultPage({ params }: ScanPageProps) {
         setStatus(data.status);
         setProgress(data.progress);
         setMessage(data.message || "");
-        if (data.scanMode) setScanMode(data.scanMode);
         if (data.logs && data.logs.length > 0) {
           setLogEntries((prev) => [...prev, ...data.logs]);
         }
@@ -344,7 +342,6 @@ export default function ScanResultPage({ params }: ScanPageProps) {
             status={status}
             progress={progress}
             message={message}
-            scanMode={scanMode}
             logs={logEntries}
           />
         </div>

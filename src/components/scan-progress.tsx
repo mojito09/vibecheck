@@ -11,20 +11,10 @@ interface ScanProgressProps {
   status: string;
   progress: number;
   message: string;
-  scanMode?: string;
   logs?: LogEntry[];
 }
 
-const QUICK_STEPS = [
-  { key: "QUEUED", label: "Queued", icon: "○" },
-  { key: "CLONING", label: "Cloning repository", icon: "↓" },
-  { key: "DETECTING", label: "Detecting languages", icon: "◎" },
-  { key: "ANALYZING", label: "Running analyzers", icon: "⟐" },
-  { key: "SCANNING_DEPS", label: "Scanning dependencies", icon: "◈" },
-  { key: "GENERATING_REPORT", label: "Generating report", icon: "◆" },
-];
-
-const DEEP_STEPS = [
+const SCAN_STEPS = [
   { key: "QUEUED", label: "Queued", icon: "○" },
   { key: "CLONING", label: "Cloning repository", icon: "↓" },
   { key: "DETECTING", label: "Detecting languages", icon: "◎" },
@@ -213,9 +203,8 @@ function LogFeed({ logs }: { logs: LogEntry[] }) {
   );
 }
 
-export function ScanProgress({ status, progress, message, scanMode = "quick", logs = [] }: ScanProgressProps) {
-  const steps = scanMode === "deep" ? DEEP_STEPS : QUICK_STEPS;
-  const currentIndex = steps.findIndex((s) => s.key === status);
+export function ScanProgress({ status, progress, message, logs = [] }: ScanProgressProps) {
+  const currentIndex = SCAN_STEPS.findIndex((s) => s.key === status);
   const eta = useEta(progress);
   const elapsed = useElapsed(progress > 0 && progress < 100);
 
@@ -225,7 +214,7 @@ export function ScanProgress({ status, progress, message, scanMode = "quick", lo
       <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider">
         <div className="flex items-center gap-4">
           <span className="text-muted-foreground">
-            {scanMode === "deep" ? "Deep Scan" : "Quick Scan"}
+            Deep Scan
           </span>
           <span className="text-foreground/30">|</span>
           <span className="text-muted-foreground">
@@ -254,7 +243,7 @@ export function ScanProgress({ status, progress, message, scanMode = "quick", lo
 
       {/* Steps */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-        {steps.map((step, index) => {
+        {SCAN_STEPS.map((step, index) => {
           const isActive = step.key === status;
           const isDone = index < currentIndex;
           const isPending = index > currentIndex;

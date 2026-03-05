@@ -32,7 +32,6 @@ export async function GET(
               progress: true,
               progressMessage: true,
               overallScore: true,
-              scanMode: true,
             },
           });
 
@@ -49,7 +48,6 @@ export async function GET(
             progress: scan.progress,
             message: scan.progressMessage,
             score: scan.overallScore,
-            scanMode: scan.scanMode,
             logs: newLogs,
           });
 

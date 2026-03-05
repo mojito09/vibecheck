@@ -331,9 +331,8 @@ function resolveDefaultBranch(repoUrl: string, requestedBranch: string): string 
 }
 
 async function processScan(job: Job<ScanJobData>) {
-  const { scanId, repoUrl, branch: requestedBranch, accessToken, scanMode = "quick" } = job.data;
+  const { scanId, repoUrl, branch: requestedBranch, accessToken } = job.data;
   let repoDir: string | null = null;
-  const isDeepScan = scanMode === "deep";
 
   try {
     await clearLogMessages(scanId);
@@ -405,10 +404,8 @@ async function processScan(job: Job<ScanJobData>) {
     });
     await log(scanId, `Detected: ${languages.join(", ") || "no languages"}${frameworks.length ? ` (${frameworks.join(", ")})` : ""}`);
 
-    // --- Parallel analysis phase ---
-    // Progress range: 20-70% for quick mode, 20-55% for deep mode
     const parallelStart = 20;
-    const parallelEnd = isDeepScan ? 55 : 75;
+    const parallelEnd = 55;
     const parallelRange = parallelEnd - parallelStart;
 
     await updateProgress(scanId, "ANALYZING", parallelStart, "Running parallel analysis...");
@@ -441,17 +438,11 @@ async function processScan(job: Job<ScanJobData>) {
     const staticFindings = [...semgrepFindings, ...secretFindings, ...depFindings, ...actionsFindings];
     await log(scanId, `Parallel analysis complete — ${staticFindings.length} total issues from static tools`);
 
-    // --- AI Review (deep mode only) ---
-    let aiFindings: FindingData[] = [];
-    if (isDeepScan) {
-      await updateProgress(scanId, "AI_REVIEW", 60, "Running AI-powered contextual review...");
-      await log(scanId, "Starting AI-powered deep review with Gemini...");
-      await log(scanId, "Preparing code context for LLM analysis...");
-      aiFindings = await runAIReview(repoDir, staticFindings, languages, frameworks, secretFindings);
-      await log(scanId, `AI review complete — ${aiFindings.length} additional insight${aiFindings.length !== 1 ? "s" : ""} found`);
-    } else {
-      await log(scanId, "Quick scan mode — skipping AI review");
-    }
+    await updateProgress(scanId, "AI_REVIEW", 60, "Running AI-powered contextual review...");
+    await log(scanId, "Starting AI-powered deep review with Claude...");
+    await log(scanId, "Preparing code context for LLM analysis...");
+    const aiFindings = await runAIReview(repoDir, staticFindings, languages, frameworks, secretFindings);
+    await log(scanId, `AI review complete — ${aiFindings.length} additional insight${aiFindings.length !== 1 ? "s" : ""} found`);
 
     const allFindings = deduplicateFindings([...staticFindings, ...aiFindings]);
     await log(scanId, `${allFindings.length} unique findings after deduplication`);
@@ -469,9 +460,7 @@ async function processScan(job: Job<ScanJobData>) {
       }
     }
 
-    // --- Report generation ---
-    const reportProgress = isDeepScan ? 85 : 80;
-    await updateProgress(scanId, "GENERATING_REPORT", reportProgress, "Generating report...");
+    await updateProgress(scanId, "GENERATING_REPORT", 85, "Generating report...");
     await log(scanId, "Generating Cursor fix prompts for each finding...");
     await log(scanId, "Computing security score...");
 
