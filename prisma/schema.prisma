@@ -27,6 +27,7 @@ model Scan {
   repoName      String
   branch        String    @default("main")
   commitSha     String?
+  scanMode      String    @default("quick")
   status        ScanStatus @default(QUEUED)
   progress      Int       @default(0)
   progressMessage String?

@@ -90,3 +90,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes scanParticle {
+  0%, 100% { top: 10%; opacity: 0.2; }
+  50% { top: 90%; opacity: 0.6; }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--border);
+}

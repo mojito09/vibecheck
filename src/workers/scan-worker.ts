@@ -14,6 +14,7 @@ import { runAIReview } from "./analyzers/ai-reviewer";
 import { runRepoGuard } from "./analyzers/repo-guard";
 import { runGithubActionsCheck } from "./analyzers/github-actions";
 import { FindingData, Severity, SEVERITY_ORDER } from "@/types/scan";
+import { pushLogMessage, clearLogMessages } from "@/lib/scan-logs";
 
 async function updateProgress(scanId: string, status: string, progress: number, message: string) {
   await prisma.scan.update({
@@ -24,6 +25,10 @@ async function updateProgress(scanId: string, status: string, progress: number, 
       progressMessage: message,
     },
   });
+}
+
+async function log(scanId: string, message: string) {
+  await pushLogMessage(scanId, message);
 }
 
 function calculateScore(findings: FindingData[]): number {
@@ -326,14 +331,18 @@ function resolveDefaultBranch(repoUrl: string, requestedBranch: string): string 
 }
 
 async function processScan(job: Job<ScanJobData>) {
-  const { scanId, repoUrl, branch: requestedBranch, accessToken } = job.data;
+  const { scanId, repoUrl, branch: requestedBranch, accessToken, scanMode = "quick" } = job.data;
   let repoDir: string | null = null;
+  const isDeepScan = scanMode === "deep";
 
   try {
+    await clearLogMessages(scanId);
+
     await prisma.scan.update({
       where: { id: scanId },
       data: { status: "CLONING", startedAt: new Date(), progress: 5, progressMessage: "Cloning repository..." },
     });
+    await log(scanId, "Initializing scan environment...");
 
     repoDir = await mkdtemp(join(tmpdir(), "vibecheck-"));
 
@@ -341,7 +350,9 @@ async function processScan(job: Job<ScanJobData>) {
       ? repoUrl.replace("https://", `https://x-access-token:${accessToken}@`)
       : repoUrl;
 
+    await log(scanId, "Resolving default branch...");
     const branch = resolveDefaultBranch(cloneUrl, requestedBranch);
+    await log(scanId, `Cloning branch "${branch}" (shallow clone)...`);
 
     execFileSync("git", ["clone", "--depth=1", "--branch", branch, cloneUrl, repoDir], {
       timeout: 2 * 60 * 1000,
@@ -351,16 +362,20 @@ async function processScan(job: Job<ScanJobData>) {
     try {
       commitSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir, encoding: "utf-8" }).trim();
     } catch {
-      // non-critical, continue without SHA
+      // non-critical
     }
 
     if (commitSha) {
       await prisma.scan.update({ where: { id: scanId }, data: { commitSha } });
+      await log(scanId, `Repository cloned at commit ${commitSha.substring(0, 8)}`);
     }
 
+    // --- Repo validation ---
     await updateProgress(scanId, "DETECTING", 10, "Validating repository...");
+    await log(scanId, "Validating repository size and structure...");
     const guardResult = await runRepoGuard(repoDir);
     if (!guardResult.passed) {
+      await log(scanId, `Validation failed: ${guardResult.failReason}`);
       await prisma.scan.update({
         where: { id: scanId },
         data: {
@@ -373,36 +388,73 @@ async function processScan(job: Job<ScanJobData>) {
       return;
     }
 
+    const sizeMB = Math.round(guardResult.totalSizeBytes / 1024 / 1024);
+    await log(scanId, `Repository validated — ${sizeMB}MB analyzable`);
     if (guardResult.skippedBinaries.length > 0) {
-      console.log(`Skipped ${guardResult.skippedBinaries.length} binary files, total analyzable size: ${Math.round(guardResult.totalSizeBytes / 1024 / 1024)}MB`);
+      await log(scanId, `Skipped ${guardResult.skippedBinaries.length} binary files`);
     }
 
+    // --- Language detection ---
     await updateProgress(scanId, "DETECTING", 15, "Detecting languages and frameworks...");
+    await log(scanId, "Scanning file extensions and config files...");
     const { languages, frameworks } = await detectLanguagesAndFrameworks(repoDir);
 
     await prisma.scan.update({
       where: { id: scanId },
       data: { languages, frameworks },
     });
+    await log(scanId, `Detected: ${languages.join(", ") || "no languages"}${frameworks.length ? ` (${frameworks.join(", ")})` : ""}`);
 
-    await updateProgress(scanId, "ANALYZING", 25, "Running static analysis with Semgrep...");
-    const semgrepFindings = await runSemgrep(repoDir, languages);
+    // --- Parallel analysis phase ---
+    // Progress range: 20-70% for quick mode, 20-55% for deep mode
+    const parallelStart = 20;
+    const parallelEnd = isDeepScan ? 55 : 75;
+    const parallelRange = parallelEnd - parallelStart;
 
-    await updateProgress(scanId, "SCANNING_SECRETS", 40, "Scanning for hardcoded secrets...");
-    const secretFindings = await runGitleaks(repoDir);
+    await updateProgress(scanId, "ANALYZING", parallelStart, "Running parallel analysis...");
+    await log(scanId, "Starting parallel analyzers...");
 
-    await updateProgress(scanId, "SCANNING_DEPS", 50, "Auditing dependencies for known CVEs...");
-    const depFindings = await runDependencyAudit(repoDir, languages);
+    const analyzerNames = ["Semgrep", "Gitleaks", "Dependencies", "CI/CD"];
+    const totalAnalyzers = analyzerNames.length;
+    let completedAnalyzers = 0;
 
-    await updateProgress(scanId, "SCANNING_DEPS", 55, "Checking CI/CD pipeline security...");
-    const actionsFindings = await runGithubActionsCheck(repoDir);
+    const updateParallelProgress = async (analyzerName: string, findingCount: number) => {
+      completedAnalyzers++;
+      const pct = Math.round(parallelStart + (completedAnalyzers / totalAnalyzers) * parallelRange);
+      const statusKey = completedAnalyzers <= 2 ? "ANALYZING" : "SCANNING_DEPS";
+      await log(scanId, `${analyzerName} complete — ${findingCount} issue${findingCount !== 1 ? "s" : ""} found`);
+      await updateProgress(scanId, statusKey, pct, `${analyzerName} complete (${completedAnalyzers}/${totalAnalyzers})...`);
+    };
+
+    await log(scanId, "  → Semgrep: static analysis across OWASP rulesets");
+    await log(scanId, "  → Gitleaks: scanning for hardcoded secrets");
+    await log(scanId, "  → Dependency audit: checking for known CVEs");
+    await log(scanId, "  → CI/CD: reviewing GitHub Actions security");
+
+    const [semgrepFindings, secretFindings, depFindings, actionsFindings] = await Promise.all([
+      runSemgrep(repoDir, languages).then(async (r) => { await updateParallelProgress("Semgrep static analysis", r.length); return r; }),
+      runGitleaks(repoDir).then(async (r) => { await updateParallelProgress("Secret detection", r.length); return r; }),
+      runDependencyAudit(repoDir, languages).then(async (r) => { await updateParallelProgress("Dependency audit", r.length); return r; }),
+      runGithubActionsCheck(repoDir).then(async (r) => { await updateParallelProgress("CI/CD pipeline check", r.length); return r; }),
+    ]);
 
     const staticFindings = [...semgrepFindings, ...secretFindings, ...depFindings, ...actionsFindings];
+    await log(scanId, `Parallel analysis complete — ${staticFindings.length} total issues from static tools`);
 
-    await updateProgress(scanId, "AI_REVIEW", 60, "Running AI-powered contextual review...");
-    const aiFindings = await runAIReview(repoDir, staticFindings, languages, frameworks, secretFindings);
+    // --- AI Review (deep mode only) ---
+    let aiFindings: FindingData[] = [];
+    if (isDeepScan) {
+      await updateProgress(scanId, "AI_REVIEW", 60, "Running AI-powered contextual review...");
+      await log(scanId, "Starting AI-powered deep review with Gemini...");
+      await log(scanId, "Preparing code context for LLM analysis...");
+      aiFindings = await runAIReview(repoDir, staticFindings, languages, frameworks, secretFindings);
+      await log(scanId, `AI review complete — ${aiFindings.length} additional insight${aiFindings.length !== 1 ? "s" : ""} found`);
+    } else {
+      await log(scanId, "Quick scan mode — skipping AI review");
+    }
 
     const allFindings = deduplicateFindings([...staticFindings, ...aiFindings]);
+    await log(scanId, `${allFindings.length} unique findings after deduplication`);
 
     for (const finding of allFindings) {
       if (!finding.cursorPromptShort || !finding.cursorPromptDetailed) {
@@ -417,11 +469,16 @@ async function processScan(job: Job<ScanJobData>) {
       }
     }
 
-    await updateProgress(scanId, "GENERATING_REPORT", 85, "Generating report...");
+    // --- Report generation ---
+    const reportProgress = isDeepScan ? 85 : 80;
+    await updateProgress(scanId, "GENERATING_REPORT", reportProgress, "Generating report...");
+    await log(scanId, "Generating Cursor fix prompts for each finding...");
+    await log(scanId, "Computing security score...");
 
     const score = calculateScore(allFindings);
     const summary = generateSummary(allFindings, languages, frameworks);
 
+    await log(scanId, "Persisting findings to database...");
     await prisma.finding.createMany({
       data: allFindings.map((f) => ({
         scanId,
@@ -446,6 +503,7 @@ async function processScan(job: Job<ScanJobData>) {
     });
 
     await reconcileWithPreviousScan(scanId, allFindings);
+    await log(scanId, `Scan complete! Score: ${score}/100 with ${allFindings.length} findings`);
 
     await prisma.scan.update({
       where: { id: scanId },
@@ -478,6 +536,7 @@ async function processScan(job: Job<ScanJobData>) {
       }
     }
 
+    await log(scanId, `Error: ${userMessage}`);
     await prisma.scan.update({
       where: { id: scanId },
       data: {

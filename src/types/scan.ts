@@ -37,6 +37,7 @@ export interface ScanResult {
   id: string;
   repoUrl: string;
   repoName: string;
+  scanMode: "quick" | "deep";
   status: ScanStatus;
   progress: number;
   progressMessage?: string;

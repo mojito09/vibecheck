@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { scanQueue } from "@/lib/queue";
+import type { ScanMode } from "@/lib/queue";
 
 const GITHUB_URL_REGEX = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/;
 
@@ -12,7 +13,7 @@ function extractRepoName(url: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { repoUrl, branch = "main", parentScanId } = body;
+    const { repoUrl, branch = "main", parentScanId, scanMode = "quick" } = body;
 
     if (!repoUrl || !GITHUB_URL_REGEX.test(repoUrl)) {
       return NextResponse.json(
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const validMode: ScanMode = scanMode === "deep" ? "deep" : "quick";
     const normalizedUrl = repoUrl.replace(/\/$/, "");
     const repoName = extractRepoName(normalizedUrl);
 
@@ -36,6 +38,7 @@ export async function POST(request: NextRequest) {
         repoUrl: normalizedUrl,
         repoName,
         branch,
+        scanMode: validMode,
         status: "QUEUED",
         progress: 0,
         progressMessage: "Scan queued...",
@@ -47,6 +50,7 @@ export async function POST(request: NextRequest) {
       scanId: scan.id,
       repoUrl: normalizedUrl,
       branch,
+      scanMode: validMode,
     });
 
     return NextResponse.json({ scanId: scan.id }, { status: 201 });

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ScanMode } from "@/lib/queue";
 
 export default function ScanPage() {
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("main");
+  const [scanMode, setScanMode] = useState<ScanMode>("quick");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -19,7 +21,11 @@ export default function ScanPage() {
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: repoUrl.trim(), branch: branch.trim() || "main" }),
+        body: JSON.stringify({
+          repoUrl: repoUrl.trim(),
+          branch: branch.trim() || "main",
+          scanMode,
+        }),
       });
 
       const data = await res.json();
@@ -75,6 +81,42 @@ export default function ScanPage() {
             />
           </div>
 
+          {/* Scan Mode Toggle */}
+          <div>
+            <label className="text-[0.7rem] uppercase tracking-[0.05em] mb-3 block text-muted-foreground">
+              Scan Mode
+            </label>
+            <div className="flex gap-0">
+              <button
+                type="button"
+                onClick={() => setScanMode("quick")}
+                className={`px-5 py-3 font-mono text-sm uppercase tracking-[0.05em] border-2 transition-all cursor-pointer ${
+                  scanMode === "quick"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-transparent text-foreground border-border hover:border-foreground/50"
+                }`}
+              >
+                Quick Scan
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanMode("deep")}
+                className={`px-5 py-3 font-mono text-sm uppercase tracking-[0.05em] border-2 border-l-0 transition-all cursor-pointer ${
+                  scanMode === "deep"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-transparent text-foreground border-border hover:border-foreground/50"
+                }`}
+              >
+                Deep Scan
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 font-mono max-w-md">
+              {scanMode === "quick"
+                ? "Static analysis, secret detection, dependency audit, CI/CD checks. ~30-60s."
+                : "Everything in Quick + AI-powered contextual review with Gemini. ~1-3 min."}
+            </p>
+          </div>
+
           {error && (
             <p className="text-sm text-vc-orange">{error}</p>
           )}
@@ -88,7 +130,9 @@ export default function ScanPage() {
           </button>
 
           <p className="text-xs text-muted-foreground font-mono">
-            The scan typically takes 1-3 minutes depending on repository size.
+            {scanMode === "quick"
+              ? "Quick scans typically take 30-60 seconds."
+              : "Deep scans typically take 1-3 minutes depending on repository size."}
           </p>
         </form>
       </div>

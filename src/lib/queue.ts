@@ -11,10 +11,13 @@ const connection = {
 
 export const scanQueue = new Queue("scan", { connection });
 
+export type ScanMode = "quick" | "deep";
+
 export interface ScanJobData {
   scanId: string;
   repoUrl: string;
   branch: string;
+  scanMode: ScanMode;
   accessToken?: string;
 }
 

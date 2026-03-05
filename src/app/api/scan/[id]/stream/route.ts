@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getLogMessages } from "@/lib/scan-logs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ export async function GET(
 
       let completed = false;
       let retries = 0;
-      const maxRetries = 300; // 5 minutes at 1s intervals
+      const maxRetries = 300;
+      let logIndex = 0;
 
       while (!completed && retries < maxRetries) {
         try {
@@ -30,6 +32,7 @@ export async function GET(
               progress: true,
               progressMessage: true,
               overallScore: true,
+              scanMode: true,
             },
           });
 
@@ -38,11 +41,16 @@ export async function GET(
             break;
           }
 
+          const { messages: newLogs, nextIndex } = await getLogMessages(id, logIndex);
+          logIndex = nextIndex;
+
           sendEvent({
             status: scan.status,
             progress: scan.progress,
             message: scan.progressMessage,
             score: scan.overallScore,
+            scanMode: scan.scanMode,
+            logs: newLogs,
           });
 
           if (scan.status === "COMPLETED" || scan.status === "FAILED") {
@@ -50,7 +58,7 @@ export async function GET(
             break;
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 800));
           retries++;
         } catch {
           await new Promise((resolve) => setTimeout(resolve, 2000));
